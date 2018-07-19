@@ -52,6 +52,7 @@
 # define rb_cNilClass		(*dll_rb_cNilClass)
 # define rb_cSymbol		(*dll_rb_cSymbol)
 # define rb_cTrueClass		(*dll_rb_cTrueClass)
+# define rb_mKernel		(*dll_rb_mKernel)
 # if defined(DYNAMIC_RUBY_VER) && DYNAMIC_RUBY_VER >= 18
 /*
  * On ver 1.8, all Ruby functions are exported with "__declspec(dllimport)"
@@ -263,10 +264,12 @@ static void ruby_vim_init(void);
 # define rb_obj_as_string		dll_rb_obj_as_string
 # define rb_obj_id			dll_rb_obj_id
 # define rb_raise			dll_rb_raise
+# define rb_singleton_class		dll_rb_singleton_class
 # define rb_str_cat			dll_rb_str_cat
 # define rb_str_concat			dll_rb_str_concat
 # undef rb_str_new
 # define rb_str_new			dll_rb_str_new
+# define rb_undef_method		dll_rb_undef_method
 # ifdef rb_str_new2
 /* Ruby may #define rb_str_new2 to use rb_str_new_cstr. */
 #  define need_rb_str_new_cstr 1
@@ -337,6 +340,7 @@ VALUE *dll_rb_cNilClass;
 static VALUE *dll_rb_cObject;
 VALUE *dll_rb_cSymbol;
 VALUE *dll_rb_cTrueClass;
+VALUE *dll_rb_mKernel;
 static void (*dll_rb_check_type) (VALUE,int);
 # ifdef USE_TYPEDDATA
 static void *(*dll_rb_check_typeddata) (VALUE,const rb_data_type_t *);
@@ -385,6 +389,7 @@ static VALUE (*dll_rb_obj_alloc) (VALUE);
 static VALUE (*dll_rb_obj_as_string) (VALUE);
 static VALUE (*dll_rb_obj_id) (VALUE);
 static void (*dll_rb_raise) (VALUE, const char*, ...);
+static VALUE (*dll_rb_singleton_class) (VALUE);
 # if defined(DYNAMIC_RUBY_VER) && DYNAMIC_RUBY_VER >= 18
 static VALUE (*dll_rb_string_value) (volatile VALUE*);
 # else
@@ -393,6 +398,7 @@ static char *(*dll_rb_str2cstr) (VALUE,int*);
 static VALUE (*dll_rb_str_cat) (VALUE, const char*, long);
 static VALUE (*dll_rb_str_concat) (VALUE, VALUE);
 static VALUE (*dll_rb_str_new) (const char*, long);
+static void (*dll_rb_undef_method) (VALUE, const char*);
 # ifdef need_rb_str_new_cstr
 /* Ruby may #define rb_str_new2 to use rb_str_new_cstr. */
 static VALUE (*dll_rb_str_new_cstr) (const char*);
@@ -530,6 +536,7 @@ static struct
     {"rb_cObject", (RUBY_PROC*)&dll_rb_cObject},
     {"rb_cSymbol", (RUBY_PROC*)&dll_rb_cSymbol},
     {"rb_cTrueClass", (RUBY_PROC*)&dll_rb_cTrueClass},
+    {"rb_mKernel", (RUBY_PROC*)&dll_rb_mKernel},
     {"rb_check_type", (RUBY_PROC*)&dll_rb_check_type},
 # ifdef USE_TYPEDDATA
     {"rb_check_typeddata", (RUBY_PROC*)&dll_rb_check_typeddata},
@@ -578,6 +585,7 @@ static struct
     {"rb_obj_as_string", (RUBY_PROC*)&dll_rb_obj_as_string},
     {"rb_obj_id", (RUBY_PROC*)&dll_rb_obj_id},
     {"rb_raise", (RUBY_PROC*)&dll_rb_raise},
+    {"rb_singleton_class", (RUBY_PROC*)&dll_rb_singleton_class},
 # if defined(DYNAMIC_RUBY_VER) && DYNAMIC_RUBY_VER >= 18
     {"rb_string_value", (RUBY_PROC*)&dll_rb_string_value},
 # else
@@ -586,6 +594,7 @@ static struct
     {"rb_str_cat", (RUBY_PROC*)&dll_rb_str_cat},
     {"rb_str_concat", (RUBY_PROC*)&dll_rb_str_concat},
     {"rb_str_new", (RUBY_PROC*)&dll_rb_str_new},
+    {"rb_undef_method", (RUBY_PROC*)&dll_rb_undef_method},
 # ifdef need_rb_str_new_cstr
     {"rb_str_new_cstr", (RUBY_PROC*)&dll_rb_str_new_cstr},
 # else
@@ -1547,6 +1556,8 @@ static void ruby_io_init(void)
     rb_stdout = rb_obj_alloc(rb_cObject);
     rb_define_singleton_method(rb_stdout, "write", vim_message, 1);
     rb_define_singleton_method(rb_stdout, "flush", f_nop, 0);
+    rb_undef_method(rb_singleton_class(rb_mKernel), "p");
+    rb_undef_method(rb_mKernel, "p");
     rb_define_global_function("p", f_p, -1);
 }
 
