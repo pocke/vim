@@ -251,6 +251,7 @@ static void ruby_vim_init(void);
 # define rb_global_variable		dll_rb_global_variable
 # define rb_hash_aset			dll_rb_hash_aset
 # define rb_hash_new			dll_rb_hash_new
+# define rb_id2name			dll_rb_id2name
 # define rb_inspect			dll_rb_inspect
 # define rb_int2inum			dll_rb_int2inum
 
@@ -597,6 +598,7 @@ static struct
     {"rb_global_variable", (RUBY_PROC*)&dll_rb_global_variable},
     {"rb_hash_aset", (RUBY_PROC*)&dll_rb_hash_aset},
     {"rb_hash_new", (RUBY_PROC*)&dll_rb_hash_new},
+    {"rb_id2name", (RUBY_PROC*)&dll_rb_id2name},
     {"rb_inspect", (RUBY_PROC*)&dll_rb_inspect},
     {"rb_int2inum", (RUBY_PROC*)&dll_rb_int2inum},
     {"rb_intern", (RUBY_PROC*)&dll_rb_intern},
@@ -1149,6 +1151,54 @@ static VALUE vim_to_ruby(typval_T *tv)
 }
 #endif
 
+#ifdef FEAT_EVAL
+static void ruby_to_vim(VALUE v, typval_T* tv)
+{
+    long n;
+    switch (TYPE(v)) {
+	case T_TRUE:
+	    tv->v_type = VAR_SPECIAL;
+	    tv->vval.v_number = VVAL_TRUE;
+	    break;
+	case T_FALSE:
+	    tv->v_type = VAR_SPECIAL;
+	    tv->vval.v_number = VVAL_FALSE;
+	    break;
+	case T_NIL:
+	    tv->v_type = VAR_SPECIAL;
+	    tv->vval.v_number = VVAL_NULL;
+	case T_FIXNUM:
+	    n = NUM2LONG(v);
+	    tv->v_type = VAR_NUMBER;
+	    if (n < VARNUM_MIN) {
+		EMSG(_("Too smoll"));
+	    } else if (VARNUM_MAX < n) {
+		EMSG(_("Too large"));
+	    } else {
+		tv->vval.v_number = n;
+	    }
+	    break;
+	case T_STRING:
+	    tv->v_type = VAR_STRING;
+	    tv->vval.v_string = vim_strsave((char_u *)RSTRING_PTR(v));
+	    break;
+	case T_SYMBOL:
+	    tv->v_type = VAR_STRING;
+	    tv->vval.v_string = vim_strsave((char_u *)rb_id2name(SYM2ID(v)));
+	    break;
+	case T_FLOAT:
+	case T_RATIONAL:
+	case T_COMPLEX:
+	case T_REGEXP:
+	case T_ARRAY:
+	case T_HASH:
+	case T_BIGNUM:
+	default:
+	    break;
+    }
+}
+#endif
+
 static VALUE vim_evaluate(VALUE self UNUSED, VALUE str)
 {
 #ifdef FEAT_EVAL
@@ -1687,4 +1737,19 @@ void vim_ruby_init(void *stack_start)
 {
     /* should get machine stack start address early in main function */
     ruby_stack_start = stack_start;
+}
+
+void do_rubyeval(char_u *str, typval_T *rettv)
+{
+    int state;
+    char *script;
+    VALUE result;
+
+    script = (char *)str;
+    if (ensure_ruby_initialized()) {
+	result = rb_eval_string_protect(script, &state);
+    }
+    if (state)
+	error_print(state);
+    ruby_to_vim(result, rettv);
 }
